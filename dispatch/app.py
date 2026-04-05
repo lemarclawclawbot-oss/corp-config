@@ -497,10 +497,17 @@ def run_task(task_id, machine, prompt):
                 claude_bin = "claude"
             cmd = [claude_bin, "--print", prompt]
 
+        # Build clean env: add ~/.local/bin to PATH, remove model-switch
+        # overrides so claude uses its OAuth credentials
+        clean_env = {k: v for k, v in os.environ.items()
+                     if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL")}
+        clean_env["PATH"] = clean_env.get("PATH", "") + ":" + os.path.expanduser("~/.local/bin")
+        clean_env["HOME"] = os.path.expanduser("~")
+
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            env={**os.environ, "PATH": os.environ.get("PATH", "") + ":" + os.path.expanduser("~/.local/bin")},
+            env=clean_env,
             stderr=subprocess.STDOUT,
             text=True,
         )
