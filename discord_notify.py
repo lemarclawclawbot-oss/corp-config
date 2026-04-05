@@ -39,7 +39,10 @@ def post(channel, message, username=None):
         "username": username or f"{channel}-observer",
     }).encode()
     try:
-        req = Request(url, data=payload, headers={"Content-Type": "application/json"})
+        req = Request(url, data=payload, headers={
+            "Content-Type": "application/json",
+            "User-Agent": "CorpFleet/1.0",
+        })
         resp = urlopen(req, timeout=10)
         return resp.status
     except Exception:
