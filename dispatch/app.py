@@ -492,11 +492,15 @@ def run_task(task_id, machine, prompt):
                 f"claude --print '{prompt}'"
             ]
         else:
-            cmd = ["claude", "--print", prompt]
+            claude_bin = os.path.expanduser("~/.local/bin/claude")
+            if not os.path.exists(claude_bin):
+                claude_bin = "claude"
+            cmd = [claude_bin, "--print", prompt]
 
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
+            env={**os.environ, "PATH": os.environ.get("PATH", "") + ":" + os.path.expanduser("~/.local/bin")},
             stderr=subprocess.STDOUT,
             text=True,
         )
