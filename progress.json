@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-05T16:30:06.800052",
+  "last_updated": "2026-04-05T16:59:34.212989",
   "fleet": {
     "zbook": {
       "role": "heavy_lifter",
@@ -64,20 +64,22 @@
     "chromebook": {
       "role": "dashboard_viewer",
       "ip": "unknown",
-      "status": "offline",
+      "status": "online",
       "services": {
-        "observer": "pending",
-        "browser_dashboard": "pending"
+        "observer": "running",
+        "browser_dashboard": "connected"
       },
       "tasks": {
-        "pending": [
+        "completed": [
           "Clone corp-config repo",
           "Install model-switch (proxy mode)",
           "Run observer.py (read-only)",
           "Open dashboard in browser",
-          "Set cron for auto-sync"
-        ]
-      }
+          "Set systemd timer for auto-sync"
+        ],
+        "pending": []
+      },
+      "last_heartbeat": "2026-04-05T16:59:34.199831"
     }
   },
   "telegram": {
