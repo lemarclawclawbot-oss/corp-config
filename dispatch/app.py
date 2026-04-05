@@ -52,7 +52,7 @@ MACHINES = {
     },
     "lenovo": {
         "host": "100.66.197.79",
-        "user": "lemai",
+        "user": "lem-ai",
         "label": "Lenovo (Router/Relay)",
         "color": "#ffaa00",
         "ssh": True,
