@@ -51,14 +51,14 @@ MACHINES = {
         "ssh": False,
     },
     "lenovo": {
-        "host": "192.168.1.148",
+        "host": "100.66.197.79",
         "user": "lemai",
         "label": "Lenovo (Router/Relay)",
         "color": "#ffaa00",
         "ssh": True,
     },
     "chromebook": {
-        "host": "",  # needs real LAN IP — Crostini IPs won't work
+        "host": "100.82.232.25",
         "user": "lemai",
         "label": "Chromebook (Dashboard)",
         "color": "#aa88ff",
