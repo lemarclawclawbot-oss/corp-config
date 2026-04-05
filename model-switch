@@ -1,0 +1,97 @@
+#!/bin/bash
+# Switch Claude Code's model provider
+# Usage: model-switch <model-name>
+# Then run 'claude' to start with that model
+
+SETTINGS_FILE="$HOME/.claude/settings.json"
+BACKUP_FILE="$HOME/.claude/settings.json.bak"
+
+show_models() {
+    echo "Available models:"
+    echo "  opus        - Claude Opus 4.6 (Anthropic API, paid)"
+    echo "  sonnet      - Claude Sonnet 4.6 (Anthropic API, paid)"
+    echo "  haiku       - Claude Haiku 4.5 (Anthropic API, paid)"
+    echo "  glm4        - GLM4 local (Ollama, free)"
+    echo "  qwen        - Qwen2.5-Coder 7B (Ollama, free)"
+    echo "  hermes      - Hermes3 (Ollama, free)"
+    echo "  glm5        - GLM 5.1 (Z.AI tokens)"
+    echo ""
+    echo "Usage: model-switch <model-name>"
+}
+
+if [ -z "$1" ]; then
+    show_models
+    exit 0
+fi
+
+# Backup current settings
+cp "$SETTINGS_FILE" "$BACKUP_FILE" 2>/dev/null
+
+case "$1" in
+    opus|sonnet|haiku)
+        # Native Claude models - clear any custom provider env vars
+        unset ANTHROPIC_BASE_URL
+        sed -i 's|"ANTHROPIC_BASE_URL":.*||g' "$SETTINGS_FILE" 2>/dev/null
+        python3 -c "
+import json
+with open('$SETTINGS_FILE') as f: cfg = json.load(f)
+cfg['model'] = '$1'
+cfg.pop('customApiUrl', None)
+with open('$SETTINGS_FILE', 'w') as f: json.dump(cfg, f, indent=2)
+"
+        echo "Switched to Claude $1 (Anthropic API). Restart Claude Code to apply."
+        ;;
+    glm4)
+        python3 -c "
+import json
+with open('$SETTINGS_FILE') as f: cfg = json.load(f)
+cfg['model'] = 'glm4:latest'
+cfg['env'] = cfg.get('env', {})
+cfg['env']['ANTHROPIC_BASE_URL'] = 'http://localhost:11434/v1'
+cfg['env']['ANTHROPIC_API_KEY'] = 'ollama'
+with open('$SETTINGS_FILE', 'w') as f: json.dump(cfg, f, indent=2)
+"
+        echo "Switched to GLM4 local (Ollama, free). Restart Claude Code to apply."
+        ;;
+    qwen)
+        python3 -c "
+import json
+with open('$SETTINGS_FILE') as f: cfg = json.load(f)
+cfg['model'] = 'qwen2.5-coder:7b'
+cfg['env'] = cfg.get('env', {})
+cfg['env']['ANTHROPIC_BASE_URL'] = 'http://localhost:11434/v1'
+cfg['env']['ANTHROPIC_API_KEY'] = 'ollama'
+with open('$SETTINGS_FILE', 'w') as f: json.dump(cfg, f, indent=2)
+"
+        echo "Switched to Qwen2.5-Coder 7B (Ollama, free). Restart Claude Code to apply."
+        ;;
+    hermes)
+        python3 -c "
+import json
+with open('$SETTINGS_FILE') as f: cfg = json.load(f)
+cfg['model'] = 'hermes3:latest'
+cfg['env'] = cfg.get('env', {})
+cfg['env']['ANTHROPIC_BASE_URL'] = 'http://localhost:11434/v1'
+cfg['env']['ANTHROPIC_API_KEY'] = 'ollama'
+with open('$SETTINGS_FILE', 'w') as f: json.dump(cfg, f, indent=2)
+"
+        echo "Switched to Hermes3 (Ollama, free). Restart Claude Code to apply."
+        ;;
+    glm5)
+        python3 -c "
+import json
+with open('$SETTINGS_FILE') as f: cfg = json.load(f)
+cfg['model'] = 'glm-5.1'
+cfg['env'] = cfg.get('env', {})
+cfg['env']['ANTHROPIC_BASE_URL'] = 'https://open.bigmodel.cn/api/paas/v4'
+cfg['env']['ANTHROPIC_API_KEY'] = '41fd2efc20414da6b8348d995dfa5d40.taXL5xmHypvLrGEc'
+with open('$SETTINGS_FILE', 'w') as f: json.dump(cfg, f, indent=2)
+"
+        echo "Switched to GLM 5.1 (Z.AI tokens). Restart Claude Code to apply."
+        ;;
+    *)
+        echo "Unknown model: $1"
+        show_models
+        exit 1
+        ;;
+esac
