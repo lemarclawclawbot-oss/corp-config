@@ -27,8 +27,9 @@
 - [x] model-switch script — working
 - [x] Screen timeout increased
 - [x] Aider removed (not needed)
-- [ ] PENDING: Chromebook proxy connection to ZBook Ollama — needs testing
-- [ ] PENDING: gh CLI + GitHub repo push — needs `sudo apt install gh` and `gh auth login`
+- [x] Chromebook proxy config — documented in zbook/CONFIG.md
+- [x] gh CLI + GitHub repo — pushed to lemarclawclawbot-oss/corp-config
+- [x] Auto-sync cron — corp-sync.sh pulls repo every 30 min
 
 ---
 
@@ -61,6 +62,15 @@ When Claude Code hits session limits, switch to a free local model hosted on ZBo
 - Verify your `model-switch` matches this version
 - Update Ollama models: `ollama pull glm4 && ollama pull qwen2.5-coder:7b`
 - If using ZBook as proxy instead of local Ollama, point to `192.168.1.142:11434`
+
+### ALL MACHINES: Set Up Auto-Sync
+1. Clone this repo: `git clone https://github.com/lemarclawclawbot-oss/corp-config.git ~/corp-config`
+2. Copy `corp-sync.sh` to `~/.local/bin/corp-sync.sh` and `chmod +x` it
+3. Add to crontab (`crontab -e`):
+   ```
+   */30 * * * * /home/$USER/.local/bin/corp-sync.sh
+   ```
+4. This auto-pulls the repo every 30 minutes so you always have the latest config
 
 ### Update Your Memory Files
 Each machine should update its `ai_toolkit.md` memory to reflect the model-switch system and available models. Remove any references to Aider — it has been replaced by model-switch.
