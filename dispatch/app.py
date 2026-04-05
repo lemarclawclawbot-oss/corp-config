@@ -171,16 +171,18 @@ DISPATCH_HTML = """
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #0a0a0a; color: #e0e0e0; font-family: 'Segoe UI', system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; }
+        html, body { height: 100%; overflow: hidden; }
+        body { background: #0a0a0a; color: #e0e0e0; font-family: 'Segoe UI', system-ui, sans-serif;
+               display: flex; flex-direction: column; min-height: 100vh; min-height: -webkit-fill-available; }
 
-        .header { background: #111; border-bottom: 1px solid #333; padding: 15px 20px; display: flex; align-items: center; gap: 15px; }
-        .header h1 { color: #00ff88; font-size: 1.3em; font-family: 'Courier New', monospace; }
-        .header .status { font-size: 0.8em; color: #666; flex: 1; }
-        .header .logout { background: none; border: 1px solid #555; color: #888; padding: 6px 14px;
-                          border-radius: 6px; cursor: pointer; font-size: 0.8em; }
+        .header { background: #111; border-bottom: 1px solid #333; padding: 10px 15px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .header h1 { color: #00ff88; font-size: 1.1em; font-family: 'Courier New', monospace; }
+        .header .status { font-size: 0.75em; color: #666; flex: 1; }
+        .header .logout { background: none; border: 1px solid #555; color: #888; padding: 4px 10px;
+                          border-radius: 6px; cursor: pointer; font-size: 0.75em; }
         .header .logout:hover { border-color: #ff4444; color: #ff4444; }
 
-        .main { flex: 1; display: flex; overflow: hidden; }
+        .main { flex: 1; display: flex; overflow: hidden; min-height: 0; }
 
         .sidebar { width: 250px; background: #111; border-right: 1px solid #333; padding: 15px; overflow-y: auto; }
         .sidebar h3 { color: #888; font-size: 0.75em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
@@ -217,7 +219,7 @@ DISPATCH_HTML = """
         .escalation .approve { background: #00ff88; color: #000; }
         .escalation .deny { background: #ff4444; color: #fff; }
 
-        .input-area { padding: 15px 20px; background: #111; border-top: 1px solid #333; }
+        .input-area { padding: 10px 15px; background: #111; border-top: 1px solid #333; flex-shrink: 0; }
         .input-row { display: flex; gap: 10px; align-items: flex-end; }
         .input-row textarea { flex: 1; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #e0e0e0; padding: 12px; font-size: 0.95em; font-family: inherit; resize: none; min-height: 50px; max-height: 150px; }
         .input-row textarea:focus { outline: none; border-color: #00ff88; }
@@ -230,13 +232,20 @@ DISPATCH_HTML = """
 
         /* Mobile: show machine selector as horizontal bar */
         @media (max-width: 768px) {
-            .sidebar { width: 100%; flex-shrink: 0; height: auto; max-height: 120px; border-right: none;
-                       border-bottom: 1px solid #333; display: flex; flex-wrap: wrap; gap: 6px;
-                       padding: 10px; overflow-x: auto; }
+            .sidebar { width: 100%; flex-shrink: 0; height: auto; max-height: 80px; border-right: none;
+                       border-bottom: 1px solid #333; display: flex; flex-wrap: nowrap; gap: 6px;
+                       padding: 8px; overflow-x: auto; }
             .sidebar h3 { display: none; }
             .sidebar .history-section { display: none; }
-            .machine-btn { width: auto; flex: 1; min-width: 100px; padding: 8px; font-size: 0.8em; }
+            .machine-btn { width: auto; flex: 1; min-width: 80px; padding: 6px; font-size: 0.75em; }
+            .machine-btn .role { display: none; }
             .main { flex-direction: column; }
+            .chat-area { min-height: 0; flex: 1; }
+            .messages { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+            .header h1 { font-size: 0.95em; }
+            .header .status { display: none; }
+            .input-row textarea { min-height: 40px; font-size: 0.9em; }
+            .input-row button { padding: 10px 16px; font-size: 0.85em; }
         }
     </style>
 </head>
@@ -294,6 +303,32 @@ DISPATCH_HTML = """
     <script>
         let selectedMachine = 'zbook';
 
+        // Restore chat history from localStorage
+        (function loadHistory() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('dispatch_history') || '[]');
+                saved.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = `message ${item.role}`;
+                    div.innerHTML = `<div class="meta">${item.meta}</div><div class="bubble">${item.content}</div>`;
+                    document.getElementById('messages').appendChild(div);
+                });
+                const m = document.getElementById('messages');
+                m.scrollTop = m.scrollHeight;
+            } catch(e) {}
+        })();
+
+        function saveMessage(role, content, machine) {
+            try {
+                const history = JSON.parse(localStorage.getItem('dispatch_history') || '[]');
+                const meta = role === 'user' ? `YOU → ${machine.toUpperCase()}` : `${machine.toUpperCase()} AGENT`;
+                history.push({role, meta, content});
+                // Keep last 50 messages
+                if (history.length > 50) history.splice(0, history.length - 50);
+                localStorage.setItem('dispatch_history', JSON.stringify(history));
+            } catch(e) {}
+        }
+
         function selectMachine(name, btn) {
             selectedMachine = name;
             document.getElementById('target-name').textContent = name.toUpperCase();
@@ -318,7 +353,8 @@ DISPATCH_HTML = """
             document.getElementById('prompt').value = '';
             document.getElementById('send-btn').disabled = true;
 
-            addMessage('user', prompt, selectedMachine);
+            addMessage('user', escapeHtml(prompt), selectedMachine);
+            saveMessage('user', escapeHtml(prompt), selectedMachine);
 
             const agentDiv = addMessage('agent', '<div class="typing">Working...</div>', selectedMachine);
             const bubble = agentDiv.querySelector('.bubble');
@@ -369,10 +405,12 @@ DISPATCH_HTML = """
                 } else {
                     let output = data.output || 'Done (no output)';
                     let statusColor = data.status === 'completed' ? '#00ff88' : '#ff4444';
-                    bubble.innerHTML = `<pre><code>${escapeHtml(output)}</code></pre>
+                    const resultHtml = `<pre><code>${escapeHtml(output)}</code></pre>
                         <div style="margin-top:8px;font-size:0.8em;color:${statusColor}">
                         ${data.status === 'completed' ? '&#x2705;' : '&#x274C;'} ${data.status}
                         </div>`;
+                    bubble.innerHTML = resultHtml;
+                    saveMessage('agent', resultHtml, machine);
                     document.getElementById('send-btn').disabled = false;
                     addHistory(machine, data.prompt_text);
                 }

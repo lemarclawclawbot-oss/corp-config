@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-04T22:45:00",
+  "last_updated": "2026-04-05T16:30:06.800052",
   "fleet": {
     "zbook": {
       "role": "heavy_lifter",
@@ -7,35 +7,45 @@
       "mac": "38:ca:84:c7:56:2c",
       "status": "online",
       "gpu": "RTX A2000 4GB",
-      "ollama_models": ["glm4", "qwen2.5-coder:7b", "hermes3"],
+      "ollama_models": [
+        "glm4",
+        "qwen2.5-coder:7b",
+        "hermes3"
+      ],
       "services": {
         "ollama": "running",
-        "dashboard": "pending",
-        "observer": "pending"
+        "dashboard": "running",
+        "observer": "running"
       },
       "tasks": {
         "completed": [
           "CrewAI installed",
           "ZhipuAI SDK installed",
           "model-switch configured",
-          "Ollama models pulled (glm4, qwen2.5-coder, hermes3)",
-          "corp-config repo created and pushed",
-          "Auto-sync cron set (30 min)",
-          "Screen timeout extended to 30 min"
+          "Ollama models pulled",
+          "corp-config repo pushed",
+          "Auto-sync cron set",
+          "Screen timeout extended",
+          "Discord webhooks live",
+          "Telegram bot configured",
+          "Mission control dashboard",
+          "Observer script running",
+          "Dispatch app with PIN auth",
+          "Tailscale VPN mesh active",
+          "Session monitor built"
         ],
         "in_progress": [
-          "Wake-on-LAN setup",
-          "Mission control dashboard",
-          "Observer script",
-          "Telegram escalation"
+          "Wake-on-LAN (BIOS locked, HP call tomorrow)",
+          "SSH key exchange to Lenovo/Chromebook"
         ],
         "pending": []
-      }
+      },
+      "last_heartbeat": "2026-04-05T16:30:06.800034"
     },
     "lenovo": {
       "role": "router_relay",
       "ip": "unknown",
-      "status": "unknown",
+      "status": "offline",
       "services": {
         "observer": "pending",
         "wol_sender": "pending"
@@ -54,7 +64,7 @@
     "chromebook": {
       "role": "dashboard_viewer",
       "ip": "unknown",
-      "status": "unknown",
+      "status": "offline",
       "services": {
         "observer": "pending",
         "browser_dashboard": "pending"
@@ -71,8 +81,8 @@
     }
   },
   "telegram": {
-    "configured": false,
-    "bot_token": "",
-    "chat_id": ""
+    "configured": true,
+    "bot_token": "8765361665:AAGMcl83zmn6gQCtl3KYNlMTQ3hLILepOkI",
+    "chat_id": "8712086846"
   }
 }
