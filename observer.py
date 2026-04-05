@@ -22,6 +22,10 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 
+# Discord integration
+sys.path.insert(0, str(Path(__file__).parent))
+import discord_notify as discord
+
 CORP_DIR = Path(__file__).parent
 PROGRESS_FILE = CORP_DIR / "progress.json"
 LOG_DIR = CORP_DIR / "logs"
@@ -163,6 +167,10 @@ def run_zbook():
             if not ollama_up:
                 log.warning("Ollama is down — attempting restart")
                 subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                discord.alert("zbook", "Ollama went down — auto-restarting")
+
+            # Discord heartbeat
+            discord.heartbeat("zbook")
 
             log.info(f"ZBook OK | Ollama: {'up' if ollama_up else 'DOWN'} | Dashboard: {'up' if dashboard_up else 'DOWN'}")
         except Exception as e:
@@ -199,13 +207,18 @@ def run_lenovo():
                         telegram.get("bot_token", ""),
                         telegram.get("chat_id", ""),
                     )
+                    discord.alert("lenovo", f"ZBook offline — WoL sent to {ZBOOK_MAC}")
                 zbook_was_down = True
                 data["fleet"]["zbook"]["status"] = "offline"
             else:
                 if zbook_was_down:
                     log.info("ZBook is back online")
+                    discord.task_done("lenovo", "ZBook wake-up confirmed")
                 zbook_was_down = False
                 send_heartbeat(ZBOOK_IP, "lenovo")
+
+            # Discord heartbeat
+            discord.heartbeat("lenovo")
 
             data["fleet"]["lenovo"] = lenovo
             save_progress(data)
@@ -237,6 +250,7 @@ def run_chromebook():
             save_progress(data)
 
             send_heartbeat(ZBOOK_IP, "chromebook")
+            discord.heartbeat("chromebook")
 
             log.info(f"Chromebook OK | Dashboard: {'up' if dashboard_up else 'DOWN'}")
         except Exception as e:
