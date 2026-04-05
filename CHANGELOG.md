@@ -74,3 +74,88 @@ When Claude Code hits session limits, switch to a free local model hosted on ZBo
 
 ### Update Your Memory Files
 Each machine should update its `ai_toolkit.md` memory to reflect the model-switch system and available models. Remove any references to Aider — it has been replaced by model-switch.
+
+---
+
+## 2026-04-04 — Mission Control & Fleet Infrastructure (ZBook)
+
+### What Lemar Requested
+- Enable Wake-on-LAN so Lenovo and Chromebook can wake ZBook instantly
+- Create a real-time mission-control dashboard all three machines can access
+- Build observer scripts for fleet health monitoring
+- Set up Telegram escalation alerts
+- All machines must have identical access to progress.json, dashboard, and logs
+- Conflict resolution across all prior instructions
+
+### What Was Done to Complete It
+1. **Created `progress.json`** — shared fleet state file with all machine roles, tasks, services
+2. **Created `dashboard/app.py`** — Flask web dashboard at http://192.168.1.142:5000, auto-refreshes every 30s, shows all machines, tasks, services, escalation logs
+3. **Created `observer.py`** — runs on all machines, auto-detects role, monitors fleet health, sends heartbeats, triggers WoL, restarts Ollama if down
+4. **Created `setup-wol.sh`** — enables Wake-on-LAN via ethtool + systemd persistence
+5. **Created `setup-services.sh`** — installs systemd services for observer + dashboard, auto-detects machine role
+
+### Status
+- [x] progress.json — created
+- [x] Dashboard app — created
+- [x] Observer script — created
+- [x] WoL setup script — created
+- [x] Service setup script — created
+- [ ] PENDING: Run `sudo bash setup-wol.sh` on ZBook (needs BIOS WoL enabled too)
+- [ ] PENDING: Run `sudo bash setup-services.sh` on all machines
+- [ ] PENDING: Telegram bot token + chat ID (Lemar to provide)
+
+### Conflicts Found & Resolved
+1. **Aider vs model-switch** — Aider was installed then removed. model-switch replaces it entirely.
+2. **GLM API vs local** — GLM4 runs free locally, GLM5.1 uses cloud API. Both are kept.
+3. **Sync interval** — Lenovo should sync every 5 min (relay role), ZBook every 30 min (source of truth), Chromebook every 30 min.
+
+---
+
+## Instructions for ALL Machines — Mission Control Setup
+
+### Step 1: Pull the repo
+```bash
+git clone https://github.com/lemarclawclawbot-oss/corp-config.git ~/corp-config
+# or if already cloned:
+cd ~/corp-config && git pull
+```
+
+### Step 2: Install services
+```bash
+cd ~/corp-config
+sudo bash setup-services.sh
+```
+This auto-detects your machine role and starts the observer. ZBook also gets the dashboard.
+
+### Step 3: Access the dashboard
+From ANY machine's browser:
+```
+http://192.168.1.142:5000
+```
+
+### Step 4: ZBook only — Wake-on-LAN
+```bash
+sudo bash setup-wol.sh
+```
+Then enable WoL in BIOS: Reboot → F10 → Advanced → Built-in Device Options → Enable "Wake on LAN"
+
+### Step 5: Lenovo only — WoL sender
+```bash
+sudo apt install wakeonlan
+# To wake ZBook:
+wakeonlan 38:ca:84:c7:56:2c
+# Or the observer does it automatically when ZBook goes offline
+```
+
+### Step 6: Lenovo — tighten sync interval
+```bash
+crontab -e
+# Change to 5 min:
+*/5 * * * * /home/$USER/.local/bin/corp-sync.sh
+```
+
+### Step 7: Telegram (optional, all machines)
+1. Create a bot via @BotFather on Telegram
+2. Get the bot token and your chat ID
+3. Edit `progress.json` → set `telegram.bot_token` and `telegram.chat_id`
+4. Observer will auto-send alerts when ZBook goes offline

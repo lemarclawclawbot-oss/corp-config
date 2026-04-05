@@ -1,0 +1,78 @@
+{
+  "last_updated": "2026-04-04T22:45:00",
+  "fleet": {
+    "zbook": {
+      "role": "heavy_lifter",
+      "ip": "192.168.1.142",
+      "mac": "38:ca:84:c7:56:2c",
+      "status": "online",
+      "gpu": "RTX A2000 4GB",
+      "ollama_models": ["glm4", "qwen2.5-coder:7b", "hermes3"],
+      "services": {
+        "ollama": "running",
+        "dashboard": "pending",
+        "observer": "pending"
+      },
+      "tasks": {
+        "completed": [
+          "CrewAI installed",
+          "ZhipuAI SDK installed",
+          "model-switch configured",
+          "Ollama models pulled (glm4, qwen2.5-coder, hermes3)",
+          "corp-config repo created and pushed",
+          "Auto-sync cron set (30 min)",
+          "Screen timeout extended to 30 min"
+        ],
+        "in_progress": [
+          "Wake-on-LAN setup",
+          "Mission control dashboard",
+          "Observer script",
+          "Telegram escalation"
+        ],
+        "pending": []
+      }
+    },
+    "lenovo": {
+      "role": "router_relay",
+      "ip": "unknown",
+      "status": "unknown",
+      "services": {
+        "observer": "pending",
+        "wol_sender": "pending"
+      },
+      "tasks": {
+        "pending": [
+          "Clone corp-config repo",
+          "Install model-switch",
+          "Set cron to 5 min sync",
+          "Run observer.py",
+          "Install wakeonlan for ZBook wakeup",
+          "Configure as backup Ollama host"
+        ]
+      }
+    },
+    "chromebook": {
+      "role": "dashboard_viewer",
+      "ip": "unknown",
+      "status": "unknown",
+      "services": {
+        "observer": "pending",
+        "browser_dashboard": "pending"
+      },
+      "tasks": {
+        "pending": [
+          "Clone corp-config repo",
+          "Install model-switch (proxy mode)",
+          "Run observer.py (read-only)",
+          "Open dashboard in browser",
+          "Set cron for auto-sync"
+        ]
+      }
+    }
+  },
+  "telegram": {
+    "configured": false,
+    "bot_token": "",
+    "chat_id": ""
+  }
+}
