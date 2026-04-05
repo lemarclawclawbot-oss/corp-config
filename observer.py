@@ -32,7 +32,8 @@ LOG_DIR = CORP_DIR / "logs"
 LOG_FILE = LOG_DIR / "escalation.log"
 
 # Fleet config
-ZBOOK_IP = "192.168.1.142"
+# Use Tailscale IP so all machines can reach ZBook regardless of subnet
+ZBOOK_IP = "100.123.233.45"
 ZBOOK_MAC = "38:ca:84:c7:56:2c"
 DASHBOARD_PORT = 5000
 OLLAMA_PORT = 11434
