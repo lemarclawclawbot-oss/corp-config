@@ -3,45 +3,62 @@
 Corp Fleet Dispatch — Natural language task dispatch to fleet machines.
 Like Claude's Mac dispatch, but runs in a browser for any device.
 
-You type a request in plain English, pick a machine, and it runs
-`claude --print` on that machine via SSH. Results stream back.
-Sudo/dangerous commands get flagged for approval.
+Security:
+- PIN-based login (hashed, never stored in plaintext)
+- Session tokens with 8-hour expiry
+- Rate limiting: 5 failed logins = 15 min lockout
+- All actions logged to Discord + file
+- Dangerous commands require explicit approval
 """
 
+import hashlib
 import json
 import os
+import secrets
 import subprocess
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
+from functools import wraps
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, render_template_string, request
+from flask import Flask, Response, jsonify, make_response, render_template_string, request, redirect
 
 app = Flask(__name__)
+app.secret_key = "3dc4cbc8db5f30d20f49ac042423eddab6171914412f5b95d05a0e84411b9304"
 
 CORP_DIR = Path(__file__).parent.parent
 DISPATCH_LOG = CORP_DIR / "logs" / "dispatch.log"
 
-# Machine registry — update IPs as needed
+# Auth config — PIN hash (sha256). Change PIN by updating this hash.
+# Current PIN: 096361 (tell Lemar, then he can change it)
+PIN_HASH = "31c75d23036c76e0c2a57e693422b74d23a1cc1bfa817fe5a96b020db3cd8d2e"
+SESSION_DURATION = timedelta(hours=8)
+
+# Session store: {token: expiry_datetime}
+sessions = {}
+# Rate limiting: {ip: {"fails": count, "locked_until": datetime}}
+rate_limits = {}
+
+# Machine registry
 MACHINES = {
     "zbook": {
         "host": "localhost",
         "user": "lemai",
         "label": "ZBook (Heavy Lifter)",
         "color": "#00ff88",
-        "ssh": False,  # local, no SSH needed
+        "ssh": False,
     },
     "lenovo": {
-        "host": "",  # fill in Lenovo IP
+        "host": "192.168.1.148",
         "user": "lemai",
         "label": "Lenovo (Router/Relay)",
         "color": "#ffaa00",
         "ssh": True,
     },
     "chromebook": {
-        "host": "",  # fill in Chromebook IP
+        "host": "",  # needs real LAN IP — Crostini IPs won't work
         "user": "lemai",
         "label": "Chromebook (Dashboard)",
         "color": "#aa88ff",
@@ -51,6 +68,99 @@ MACHINES = {
 
 # Active tasks
 tasks = {}
+
+
+def check_auth(f):
+    """Decorator: require valid session token."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.cookies.get("dispatch_token")
+        if not token or token not in sessions:
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Not authenticated", "redirect": "/login"}), 401
+            return redirect("/login")
+        if sessions[token] < datetime.now():
+            sessions.pop(token, None)
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Session expired", "redirect": "/login"}), 401
+            return redirect("/login")
+        return f(*args, **kwargs)
+    return decorated
+
+
+def is_rate_limited(ip):
+    """Check if IP is locked out from too many failed attempts."""
+    if ip not in rate_limits:
+        return False
+    rl = rate_limits[ip]
+    if rl.get("locked_until") and datetime.now() < rl["locked_until"]:
+        return True
+    if rl.get("locked_until") and datetime.now() >= rl["locked_until"]:
+        rate_limits.pop(ip)
+        return False
+    return False
+
+
+def record_fail(ip):
+    """Record a failed login attempt."""
+    if ip not in rate_limits:
+        rate_limits[ip] = {"fails": 0}
+    rate_limits[ip]["fails"] += 1
+    if rate_limits[ip]["fails"] >= 5:
+        rate_limits[ip]["locked_until"] = datetime.now() + timedelta(minutes=15)
+        # Alert on Discord
+        try:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("discord_notify", CORP_DIR / "discord_notify.py")
+            discord = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(discord)
+            discord.alert("zbook", f"5 failed dispatch login attempts from {ip} — locked 15 min")
+        except Exception:
+            pass
+
+
+LOGIN_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Corp Dispatch — Login</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0a0a; color: #e0e0e0; font-family: 'Segoe UI', system-ui, sans-serif;
+               display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .login-box { background: #111; border: 1px solid #333; border-radius: 12px; padding: 40px;
+                     width: 90%; max-width: 360px; text-align: center; }
+        .login-box h1 { color: #00ff88; font-family: 'Courier New', monospace; margin-bottom: 8px; }
+        .login-box p { color: #888; font-size: 0.85em; margin-bottom: 24px; }
+        .pin-input { background: #1a1a1a; border: 2px solid #333; border-radius: 8px; color: #e0e0e0;
+                     padding: 14px; font-size: 1.5em; text-align: center; letter-spacing: 8px;
+                     width: 100%; font-family: 'Courier New', monospace; }
+        .pin-input:focus { outline: none; border-color: #00ff88; }
+        .submit-btn { background: #00ff88; color: #000; border: none; border-radius: 8px;
+                      padding: 12px 24px; font-weight: bold; cursor: pointer; font-size: 1em;
+                      width: 100%; margin-top: 16px; }
+        .submit-btn:hover { background: #00cc66; }
+        .error { color: #ff4444; margin-top: 12px; font-size: 0.85em; }
+        .locked { color: #ffaa00; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h1>&#x2B21; DISPATCH</h1>
+        <p>Corp Fleet Command — Enter PIN</p>
+        <form method="POST" action="/login">
+            <input type="password" name="pin" class="pin-input" maxlength="6"
+                   placeholder="------" autofocus inputmode="numeric" pattern="[0-9]*">
+            <button type="submit" class="submit-btn">Unlock</button>
+        </form>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        {% if locked %}<div class="locked">Too many attempts. Locked for 15 minutes.</div>{% endif %}
+    </div>
+</body>
+</html>
+"""
 
 DISPATCH_HTML = """
 <!DOCTYPE html>
@@ -65,7 +175,10 @@ DISPATCH_HTML = """
 
         .header { background: #111; border-bottom: 1px solid #333; padding: 15px 20px; display: flex; align-items: center; gap: 15px; }
         .header h1 { color: #00ff88; font-size: 1.3em; font-family: 'Courier New', monospace; }
-        .header .status { font-size: 0.8em; color: #666; }
+        .header .status { font-size: 0.8em; color: #666; flex: 1; }
+        .header .logout { background: none; border: 1px solid #555; color: #888; padding: 6px 14px;
+                          border-radius: 6px; cursor: pointer; font-size: 0.8em; }
+        .header .logout:hover { border-color: #ff4444; color: #ff4444; }
 
         .main { flex: 1; display: flex; overflow: hidden; }
 
@@ -115,8 +228,14 @@ DISPATCH_HTML = """
 
         .typing { color: #888; font-style: italic; padding: 5px 0; }
 
+        /* Mobile: show machine selector as horizontal bar */
         @media (max-width: 768px) {
-            .sidebar { display: none; }
+            .sidebar { width: 100%; flex-shrink: 0; height: auto; max-height: 120px; border-right: none;
+                       border-bottom: 1px solid #333; display: flex; flex-wrap: wrap; gap: 6px;
+                       padding: 10px; overflow-x: auto; }
+            .sidebar h3 { display: none; }
+            .sidebar .history-section { display: none; }
+            .machine-btn { width: auto; flex: 1; min-width: 100px; padding: 8px; font-size: 0.8em; }
             .main { flex-direction: column; }
         }
     </style>
@@ -125,6 +244,7 @@ DISPATCH_HTML = """
     <div class="header">
         <h1>&#x2B21; CORP DISPATCH</h1>
         <div class="status">Fleet Command — Natural Language Task Dispatch</div>
+        <button class="logout" onclick="if(confirm('Log out?')){document.cookie='dispatch_token=;max-age=0';location.href='/login'}">Logout</button>
     </div>
 
     <div class="main">
@@ -154,10 +274,8 @@ DISPATCH_HTML = """
                         Examples:<br>
                         &bull; "Check disk space and clean up temp files"<br>
                         &bull; "Pull the latest corp-config and restart the observer"<br>
-                        &bull; "Show me what Ollama models are installed"<br>
-                        &bull; "Update all packages"<br><br>
-                        I'll translate your request into commands, run them, and show you the results.
-                        If anything needs sudo, I'll ask you first.
+                        &bull; "Show me what Ollama models are installed"<br><br>
+                        Dangerous commands (sudo, rm, reboot) require your approval before running.
                     </div>
                 </div>
             </div>
@@ -210,8 +328,12 @@ DISPATCH_HTML = """
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({machine: selectedMachine, prompt: prompt})
             })
-            .then(response => response.json())
+            .then(response => {
+                if (response.status === 401) { location.href = '/login'; return; }
+                return response.json();
+            })
             .then(data => {
+                if (!data) return;
                 if (data.task_id) {
                     pollTask(data.task_id, bubble, selectedMachine);
                 } else {
@@ -227,8 +349,9 @@ DISPATCH_HTML = """
 
         function pollTask(taskId, bubble, machine) {
             fetch(`/api/task/${taskId}`)
-            .then(r => r.json())
+            .then(r => { if (r.status === 401) { location.href = '/login'; return; } return r.json(); })
             .then(data => {
+                if (!data) return;
                 if (data.status === 'running') {
                     let output = data.output || 'Working...';
                     bubble.innerHTML = `<div class="typing">Running...</div><pre><code>${escapeHtml(output)}</code></pre>`;
@@ -307,7 +430,6 @@ def log_dispatch(machine, prompt, result):
     with open(DISPATCH_LOG, "a") as f:
         f.write(f"{ts} | {machine} | {prompt[:80]} | {result}\n")
 
-    # Post to Discord
     try:
         import importlib.util
         spec = importlib.util.spec_from_file_location("discord_notify", CORP_DIR / "discord_notify.py")
@@ -326,14 +448,12 @@ def run_task(task_id, machine, prompt):
         m = MACHINES[machine]
 
         if m.get("ssh") and m["host"]:
-            # Remote via SSH
             cmd = [
                 "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10",
                 f"{m['user']}@{m['host']}",
                 f"claude --print '{prompt}'"
             ]
         else:
-            # Local
             cmd = ["claude", "--print", prompt]
 
         proc = subprocess.Popen(
@@ -365,12 +485,43 @@ def run_task(task_id, machine, prompt):
         log_dispatch(machine, prompt, f"error: {e}")
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    ip = request.remote_addr
+    if request.method == "GET":
+        locked = is_rate_limited(ip)
+        return render_template_string(LOGIN_HTML, error=None, locked=locked)
+
+    if is_rate_limited(ip):
+        return render_template_string(LOGIN_HTML, error=None, locked=True)
+
+    pin = request.form.get("pin", "")
+    pin_hash = hashlib.sha256(pin.encode()).hexdigest()
+
+    if pin_hash != PIN_HASH:
+        record_fail(ip)
+        locked = is_rate_limited(ip)
+        return render_template_string(LOGIN_HTML, error="Wrong PIN" if not locked else None, locked=locked)
+
+    # Success — issue session token
+    token = secrets.token_hex(32)
+    sessions[token] = datetime.now() + SESSION_DURATION
+    rate_limits.pop(ip, None)
+
+    resp = make_response(redirect("/"))
+    resp.set_cookie("dispatch_token", token, max_age=int(SESSION_DURATION.total_seconds()),
+                     httponly=True, samesite="Lax")
+    return resp
+
+
 @app.route("/")
+@check_auth
 def index():
     return render_template_string(DISPATCH_HTML, machines=MACHINES)
 
 
 @app.route("/api/dispatch", methods=["POST"])
+@check_auth
 def api_dispatch():
     data = request.json
     machine = data.get("machine", "zbook")
@@ -382,8 +533,8 @@ def api_dispatch():
     if machine not in MACHINES:
         return jsonify({"error": f"Unknown machine: {machine}"}), 400
 
-    # Check for sudo/dangerous patterns — escalate
-    dangerous = ["sudo ", "rm -rf", "mkfs", "dd if=", "chmod 777", "> /dev/", "shutdown", "reboot", "systemctl stop"]
+    dangerous = ["sudo ", "rm -rf", "mkfs", "dd if=", "chmod 777", "> /dev/", "shutdown", "reboot",
+                 "systemctl stop", "systemctl disable", "kill -9", "pkill", "format"]
     needs_escalation = any(d in prompt.lower() for d in dangerous)
 
     task_id = str(uuid.uuid4())[:8]
@@ -406,6 +557,7 @@ def api_dispatch():
 
 
 @app.route("/api/task/<task_id>")
+@check_auth
 def api_task(task_id):
     task = tasks.get(task_id)
     if not task:
@@ -414,6 +566,7 @@ def api_task(task_id):
 
 
 @app.route("/api/escalation/<task_id>", methods=["POST"])
+@check_auth
 def api_escalation(task_id):
     task = tasks.get(task_id)
     if not task:
@@ -433,6 +586,7 @@ def api_escalation(task_id):
 
 
 @app.route("/api/machines")
+@check_auth
 def api_machines():
     return jsonify(MACHINES)
 

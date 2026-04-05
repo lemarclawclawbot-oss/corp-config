@@ -81,5 +81,18 @@ def directive(message):
 if __name__ == "__main__":
     import sys
     machine = sys.argv[1] if len(sys.argv) > 1 else "zbook"
-    heartbeat(machine)
-    print(f"Heartbeat sent for {machine}")
+    action = sys.argv[2] if len(sys.argv) > 2 else "heartbeat"
+    message = " ".join(sys.argv[3:]) if len(sys.argv) > 3 else ""
+
+    if action == "heartbeat":
+        heartbeat(machine)
+        print(f"Heartbeat sent for {machine}")
+    elif action == "alert":
+        alert(machine, message or "Test alert")
+        print(f"Alert sent for {machine}")
+    elif action == "directive":
+        directive(message or "Test directive")
+        print(f"Directive sent")
+    elif action == "task":
+        task_done(machine, message or "Test task")
+        print(f"Task done sent for {machine}")
