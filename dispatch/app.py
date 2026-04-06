@@ -59,10 +59,35 @@ MACHINES = {
     },
     "chromebook": {
         "host": "100.82.232.25",
-        "user": "lemai",
+        "user": "lemarclawclawbot",
         "label": "Chromebook (Dashboard)",
         "color": "#aa88ff",
         "ssh": True,
+    },
+}
+
+# Platform / model config
+ZBOOK_OLLAMA = "http://100.123.233.45:11434/v1"
+GLM5_URL = "https://open.bigmodel.cn/api/paas/v4"
+GLM5_KEY = "41fd2efc20414da6b8348d995dfa5d40.taXL5xmHypvLrGEc"
+
+MODELS = {
+    "claude": {
+        "opus":   {"label": "Claude Opus 4.6",      "id": "claude-opus-4-6",          "env": {}},
+        "sonnet": {"label": "Claude Sonnet 4.6",    "id": "claude-sonnet-4-6",        "env": {}},
+        "haiku":  {"label": "Claude Haiku 4.5",     "id": "claude-haiku-4-5-20251001","env": {}},
+        "glm5":   {"label": "GLM 5.1 (Z.AI)",       "id": "glm-5.1",                  "env": {"ANTHROPIC_BASE_URL": GLM5_URL, "ANTHROPIC_API_KEY": GLM5_KEY}},
+        "glm4":   {"label": "GLM4 9B (Local GPU)",  "id": "glm4:latest",              "env": {"ANTHROPIC_BASE_URL": ZBOOK_OLLAMA, "ANTHROPIC_API_KEY": "ollama"}},
+        "qwen":   {"label": "Qwen2.5-Coder (Local)","id": "qwen2.5-coder:7b",         "env": {"ANTHROPIC_BASE_URL": ZBOOK_OLLAMA, "ANTHROPIC_API_KEY": "ollama"}},
+        "hermes": {"label": "Hermes3 (Local GPU)",  "id": "hermes3:latest",           "env": {"ANTHROPIC_BASE_URL": ZBOOK_OLLAMA, "ANTHROPIC_API_KEY": "ollama"}},
+    },
+    "aider": {
+        "opus":   {"label": "Claude Opus 4.6",      "model": "claude-opus-4-6",              "extra_env": {}},
+        "sonnet": {"label": "Claude Sonnet 4.6",    "model": "claude-sonnet-4-6",            "extra_env": {}},
+        "glm5":   {"label": "GLM 5.1 (Z.AI)",       "model": "openai/glm-5.1",               "extra_env": {"OPENAI_API_BASE": GLM5_URL, "OPENAI_API_KEY": GLM5_KEY}},
+        "glm4":   {"label": "GLM4 9B (Local GPU)",  "model": "ollama/glm4:latest",           "extra_env": {"OPENAI_API_BASE": ZBOOK_OLLAMA, "OPENAI_API_KEY": "ollama"}},
+        "qwen":   {"label": "Qwen2.5-Coder (Local)","model": "ollama/qwen2.5-coder:7b",      "extra_env": {"OPENAI_API_BASE": ZBOOK_OLLAMA, "OPENAI_API_KEY": "ollama"}},
+        "hermes": {"label": "Hermes3 (Local GPU)",  "model": "ollama/hermes3:latest",        "extra_env": {"OPENAI_API_BASE": ZBOOK_OLLAMA, "OPENAI_API_KEY": "ollama"}},
     },
 }
 
@@ -227,6 +252,17 @@ DISPATCH_HTML = """
         .input-row button:hover { background: #00cc66; }
         .input-row button:disabled { background: #333; color: #666; cursor: not-allowed; }
         .target-label { font-size: 0.8em; color: #888; margin-bottom: 5px; }
+        .session-controls { display: flex; gap: 6px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+        .session-controls .followup-input { flex: 1; min-width: 120px; background: #111; border: 1px solid #444; border-radius: 6px; color: #e0e0e0; padding: 6px 10px; font-size: 0.85em; }
+        .session-controls .followup-input:focus { outline: none; border-color: #00ff88; }
+        .session-controls button { background: #00ff88; color: #000; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; font-size: 0.82em; white-space: nowrap; }
+        .session-controls .close-btn { background: #333; color: #aaa; }
+        .session-controls .close-btn:hover { background: #ff4444; color: #fff; }
+        .model-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+        .model-row select { background: #1a1a1a; border: 1px solid #444; border-radius: 6px; color: #e0e0e0;
+                            padding: 6px 10px; font-size: 0.85em; flex: 1; cursor: pointer; }
+        .model-row select:focus { outline: none; border-color: #00ff88; }
+        .model-row label { font-size: 0.75em; color: #666; white-space: nowrap; }
 
         .typing { color: #888; font-style: italic; padding: 5px 0; }
 
@@ -253,7 +289,11 @@ DISPATCH_HTML = """
     <div class="header">
         <h1>&#x2B21; CORP DISPATCH</h1>
         <div class="status">Fleet Command — Natural Language Task Dispatch</div>
-        <button class="logout" onclick="if(confirm('Log out?')){document.cookie='dispatch_token=;max-age=0';location.href='/login'}">Logout</button>
+        <div style="display:flex;gap:10px;align-items:center;">
+            <a href="http://localhost:5000" target="_blank" style="color:#00ff88;text-decoration:none;padding:6px 12px;border:1px solid #00ff88;border-radius:4px;font-size:0.8em;">Dashboard</a>
+            <a href="http://localhost:5002" target="_blank" style="color:#ffaa00;text-decoration:none;padding:6px 12px;border:1px solid #ffaa00;border-radius:4px;font-size:0.8em;">Tenant Comms</a>
+            <button class="logout" onclick="if(confirm('Log out?')){document.cookie='dispatch_token=;max-age=0';location.href='/login'}">Logout</button>
+        </div>
     </div>
 
     <div class="main">
@@ -262,7 +302,8 @@ DISPATCH_HTML = """
             {% for name, m in machines.items() %}
             <button class="machine-btn {% if name == 'zbook' %}selected{% endif %}"
                     style="--color: {{ m.color }}"
-                    onclick="selectMachine('{{ name }}', this)">
+                    id="btn-{{ name }}"
+                    onclick="selectMachine('{{ name }}')">
                 <div class="name"><span class="dot online"></span>{{ name | upper }}</div>
                 <div class="role">{{ m.label }}</div>
             </button>
@@ -290,7 +331,32 @@ DISPATCH_HTML = """
             </div>
 
             <div class="input-area">
-                <div class="target-label">Dispatching to: <strong id="target-name">ZBOOK</strong></div>
+                <div class="target-label"><span id="target-label-text">Dispatching to: </span><strong id="target-name">ZBOOK</strong></div>
+                <div class="model-row">
+                    <label>Platform:</label>
+                    <select id="platform-select" onchange="onPlatformChange()">
+                        <option value="claude">Claude</option>
+                        <option value="aider">Aider</option>
+                    </select>
+                    <label>Model:</label>
+                    <select id="model-select-claude">
+                        <option value="sonnet" selected>Sonnet 4.6 (default)</option>
+                        <option value="opus">Opus 4.6 (powerful)</option>
+                        <option value="haiku">Haiku 4.5 (fast)</option>
+                        <option value="glm4">GLM4 (local free)</option>
+                        <option value="qwen">Qwen2.5 (local free)</option>
+                        <option value="hermes">Hermes3 (local free)</option>
+                        <option value="glm5">GLM 5.1 (Z.AI)</option>
+                    </select>
+                    <select id="model-select-aider" style="display:none">
+                        <option value="sonnet" selected>Sonnet 4.6 (default)</option>
+                        <option value="opus">Opus 4.6 (powerful)</option>
+                        <option value="glm4">GLM4 (local free)</option>
+                        <option value="qwen">Qwen2.5 (local free)</option>
+                        <option value="hermes">Hermes3 (local free)</option>
+                        <option value="glm5">GLM 5.1 (Z.AI)</option>
+                    </select>
+                </div>
                 <div class="input-row">
                     <textarea id="prompt" placeholder="What do you want this machine to do?" rows="2"
                               onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();dispatch()}"></textarea>
@@ -302,67 +368,126 @@ DISPATCH_HTML = """
 
     <script>
         let selectedMachine = 'zbook';
+        // Per-machine active task tracking
+        let activeTasks = {};
 
-        // Restore chat history from localStorage
-        (function loadHistory() {
-            try {
-                const saved = JSON.parse(localStorage.getItem('dispatch_history') || '[]');
-                saved.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = `message ${item.role}`;
-                    div.innerHTML = `<div class="meta">${item.meta}</div><div class="bubble">${item.content}</div>`;
-                    document.getElementById('messages').appendChild(div);
-                });
-                const m = document.getElementById('messages');
-                m.scrollTop = m.scrollHeight;
-            } catch(e) {}
-        })();
+        function activeModelSelect() {
+            var p = document.getElementById('platform-select').value;
+            return document.getElementById('model-select-' + p);
+        }
+
+        function onPlatformChange() {
+            var platform = document.getElementById('platform-select').value;
+            document.getElementById('model-select-claude').style.display = platform === 'claude' ? '' : 'none';
+            document.getElementById('model-select-aider').style.display = platform === 'aider' ? '' : 'none';
+            if (platform === 'aider' && selectedMachine !== 'zbook') {
+                selectMachine('zbook');
+            }
+        }
+
+        // Load ZBook history on startup (default machine)
+        loadMachineHistory('zbook');
 
         function saveMessage(role, content, machine) {
             try {
-                const history = JSON.parse(localStorage.getItem('dispatch_history') || '[]');
-                const meta = role === 'user' ? `YOU → ${machine.toUpperCase()}` : `${machine.toUpperCase()} AGENT`;
+                const key = 'dispatch_history_' + machine;
+                const history = JSON.parse(localStorage.getItem(key) || '[]');
+                const meta = role === 'user' ? 'YOU → ' + machine.toUpperCase() : machine.toUpperCase() + ' AGENT';
                 history.push({role, meta, content});
-                // Keep last 50 messages
                 if (history.length > 50) history.splice(0, history.length - 50);
-                localStorage.setItem('dispatch_history', JSON.stringify(history));
+                localStorage.setItem(key, JSON.stringify(history));
             } catch(e) {}
         }
 
-        function selectMachine(name, btn) {
-            selectedMachine = name;
-            document.getElementById('target-name').textContent = name.toUpperCase();
-            document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('selected'));
-            btn.classList.add('selected');
+        function loadMachineHistory(machine) {
+            const messages = document.getElementById('messages');
+            // Keep the welcome message (first child), remove the rest
+            while (messages.children.length > 1) messages.removeChild(messages.lastChild);
+            try {
+                const saved = JSON.parse(localStorage.getItem('dispatch_history_' + machine) || '[]');
+                saved.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'message ' + item.role;
+                    div.innerHTML = '<div class="meta">' + item.meta + '</div><div class="bubble">' + item.content + '</div>';
+                    messages.appendChild(div);
+                });
+                messages.scrollTop = messages.scrollHeight;
+            } catch(e) {}
         }
 
-        function addMessage(role, content, machine) {
+        function selectMachine(name) {
+            selectedMachine = name;
+            document.getElementById('target-name').textContent = name.toUpperCase();
+            document.querySelectorAll('.machine-btn').forEach(function(b) {
+                b.classList.remove('selected');
+            });
+            var btn = document.getElementById('btn-' + name);
+            if (btn) btn.classList.add('selected');
+            loadMachineHistory(name);
+            updateInputArea();
+        }
+
+        function addMessage(role, content, machine, extra='') {
             const div = document.createElement('div');
             div.className = `message ${role}`;
-            const meta = role === 'user' ? `YOU → ${machine.toUpperCase()}` : `${machine.toUpperCase()} AGENT`;
+            const base = role === 'user' ? `YOU → ${machine.toUpperCase()}` : `${machine.toUpperCase()} AGENT`;
+            const meta = extra ? `${base} · ${extra}` : base;
             div.innerHTML = `<div class="meta">${meta}</div><div class="bubble">${content}</div>`;
             document.getElementById('messages').appendChild(div);
             document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
             return div;
         }
 
+        function updateInputArea() {
+            const taskId = activeTasks[selectedMachine];
+            const btn = document.getElementById('send-btn');
+            const textarea = document.getElementById('prompt');
+            if (taskId) {
+                btn.textContent = 'Send';
+                btn.disabled = false;
+                textarea.placeholder = 'Follow-up to ' + selectedMachine.toUpperCase() + '...';
+            } else {
+                btn.textContent = 'Dispatch';
+                btn.disabled = false;
+                textarea.placeholder = 'What do you want this machine to do?';
+            }
+        }
+
         function dispatch() {
             const prompt = document.getElementById('prompt').value.trim();
             if (!prompt) return;
 
-            document.getElementById('prompt').value = '';
-            document.getElementById('send-btn').disabled = true;
+            var platform = document.getElementById('platform-select').value;
+            var modelSel = activeModelSelect();
+            var model_key = modelSel ? modelSel.value : 'sonnet';
+            var modelLabel = modelSel && modelSel.selectedIndex >= 0 ? modelSel.options[modelSel.selectedIndex].text : model_key;
 
-            addMessage('user', escapeHtml(prompt), selectedMachine);
+            // If this machine already has an active session, send as follow-up
+            const activeTaskId = activeTasks[selectedMachine];
+            if (activeTaskId) {
+                document.getElementById('prompt').value = '';
+                fetch('/api/send/' + activeTaskId, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: prompt})
+                });
+                addMessage('user', escapeHtml(prompt), selectedMachine, 'FOLLOW-UP');
+                saveMessage('user', escapeHtml(prompt), selectedMachine);
+                return;
+            }
+
+            document.getElementById('prompt').value = '';
+
+            addMessage('user', escapeHtml(prompt), selectedMachine, platform.toUpperCase() + ' / ' + modelLabel);
             saveMessage('user', escapeHtml(prompt), selectedMachine);
 
-            const agentDiv = addMessage('agent', '<div class="typing">Working...</div>', selectedMachine);
+            const agentDiv = addMessage('agent', '<div class="typing">Starting agent...</div>', selectedMachine);
             const bubble = agentDiv.querySelector('.bubble');
 
             fetch('/api/dispatch', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({machine: selectedMachine, prompt: prompt})
+                body: JSON.stringify({machine: selectedMachine, prompt: prompt, platform: platform, model_key: model_key})
             })
             .then(response => {
                 if (response.status === 401) { location.href = '/login'; return; }
@@ -371,27 +496,37 @@ DISPATCH_HTML = """
             .then(data => {
                 if (!data) return;
                 if (data.task_id) {
+                    activeTasks[selectedMachine] = data.task_id;
+                    updateInputArea();
                     pollTask(data.task_id, bubble, selectedMachine);
                 } else {
-                    bubble.innerHTML = `<span style="color:#ff4444">Error: ${data.error}</span>`;
-                    document.getElementById('send-btn').disabled = false;
+                    bubble.innerHTML = '<span style="color:#ff4444">Error: ' + (data.error||'unknown') + '</span>';
+                    updateInputArea();
                 }
             })
             .catch(err => {
-                bubble.innerHTML = `<span style="color:#ff4444">Connection error: ${err}</span>`;
-                document.getElementById('send-btn').disabled = false;
+                bubble.innerHTML = '<span style="color:#ff4444">Connection error: ' + err + '</span>';
+                updateInputArea();
             });
         }
 
         function pollTask(taskId, bubble, machine) {
-            fetch(`/api/task/${taskId}`)
+            // Only poll if this is still the active task for this machine
+            if (activeTasks[machine] !== taskId) return;
+
+            fetch('/api/task/' + taskId)
             .then(r => { if (r.status === 401) { location.href = '/login'; return; } return r.json(); })
             .then(data => {
                 if (!data) return;
-                if (data.status === 'running') {
-                    let output = data.output || 'Working...';
-                    bubble.innerHTML = `<div class="typing">Running...</div><pre><code>${escapeHtml(output)}</code></pre>`;
-                    setTimeout(() => pollTask(taskId, bubble, machine), 1500);
+                if (data.status === 'running' || data.status === 'waiting') {
+                    let output = data.output || 'Starting agent...';
+                    bubble.innerHTML =
+                        '<div class="typing">&#x25CF; Live — ' + machine.toUpperCase() + '</div>' +
+                        '<pre><code>' + escapeHtml(output) + '</code></pre>' +
+                        '<div class="session-controls">' +
+                        '<button class="close-btn" onclick="closeSession(\'' + taskId + '\',\'' + machine + '\',this)">End Session</button>' +
+                        '</div>';
+                    setTimeout(() => pollTask(taskId, bubble, machine), 2000);
                 } else if (data.status === 'escalation') {
                     bubble.innerHTML = `
                         <div class="escalation">
@@ -411,7 +546,8 @@ DISPATCH_HTML = """
                         </div>`;
                     bubble.innerHTML = resultHtml;
                     saveMessage('agent', resultHtml, machine);
-                    document.getElementById('send-btn').disabled = false;
+                    activeTasks[machine] = null;
+                    updateInputArea();
                     addHistory(machine, data.prompt_text);
                 }
             })
@@ -435,7 +571,8 @@ DISPATCH_HTML = """
                     pollTask(taskId, bubble, selectedMachine);
                 } else {
                     bubble.innerHTML = '<span style="color:#ffaa00">Denied — task cancelled.</span>';
-                    document.getElementById('send-btn').disabled = false;
+                    activeTasks[selectedMachine] = null;
+                    updateInputArea();
                 }
             });
         }
@@ -448,6 +585,19 @@ DISPATCH_HTML = """
             const hist = document.getElementById('history');
             hist.insertBefore(div, hist.firstChild);
             if (hist.children.length > 10) hist.removeChild(hist.lastChild);
+        }
+
+        function closeSession(taskId, machine, btn) {
+            fetch('/api/close/' + taskId, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})
+                .then(() => {
+                    activeTasks[machine] = null;
+                    updateInputArea();
+                    const bubble = btn ? btn.closest('.bubble') : null;
+                    if (bubble) {
+                        const controls = bubble.querySelector('.session-controls');
+                        if (controls) controls.innerHTML = '<span style="color:#888;font-size:0.8em">Session ended.</span>';
+                    }
+                });
         }
 
         function escapeHtml(text) {
@@ -478,56 +628,130 @@ def log_dispatch(machine, prompt, result):
         pass
 
 
-def run_task(task_id, machine, prompt):
-    """Run a claude command on target machine."""
+def _ssh(host_str, cmd, timeout=15):
+    """Run a command on a remote host via SSH, return CompletedProcess."""
+    return subprocess.run(
+        ["ssh", "-o", "StrictHostKeyChecking=no", f"-oConnectTimeout={timeout}", host_str, cmd],
+        capture_output=True, text=True
+    )
+
+
+def _tmux_capture(sess, host_str=None):
+    """Capture the last 500 lines of a tmux pane. Returns string."""
+    cmd = f"tmux capture-pane -t {sess} -p -S -500 2>/dev/null"
+    if host_str:
+        return _ssh(host_str, cmd, timeout=5).stdout
+    return subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout
+
+
+def _tmux_send(sess, message, host_str=None):
+    """Send a message into a running tmux session."""
+    safe = message.replace('"', '\\"').replace("$", "\\$")
+    cmd = f'tmux send-keys -t {sess} "{safe}" Enter'
+    if host_str:
+        _ssh(host_str, cmd)
+    else:
+        subprocess.run(cmd, shell=True)
+
+
+def _tmux_send_raw(sess, keys, host_str=None):
+    """Send raw tmux key names (e.g. 'Enter', 'Down Enter') without quoting as text."""
+    cmd = f"tmux send-keys -t {sess} {keys}"
+    if host_str:
+        _ssh(host_str, cmd)
+    else:
+        subprocess.run(cmd, shell=True)
+
+
+def build_agent_cmd(platform, model_key):
+    """Return (env_dict, agent_start_command) for interactive (agentic) mode.
+    Use $HOME-relative paths so commands work on any fleet machine, not just ZBook.
+    """
+    if platform == "aider":
+        cfg = MODELS["aider"].get(model_key, MODELS["aider"]["opus"])
+        cmd = f"$HOME/.aider-venv/bin/aider --model {cfg['model']} --yes"
+        return cfg["extra_env"], cmd
+    else:
+        cfg = MODELS["claude"].get(model_key, MODELS["claude"]["opus"])
+        # Use just 'claude' — PATH is prepended with $HOME/.local/bin in run_task
+        cmd = f"claude --model {cfg['id']} --dangerously-skip-permissions"
+        return cfg["env"], cmd
+
+
+def run_task(task_id, machine, prompt, platform="claude", model_key="opus"):
+    """
+    Spin up a tmux session on the target machine running claude/aider interactively,
+    send the prompt, and stream the live pane output back — exactly like sitting at
+    the terminal. Sessions persist for follow-up messages.
+    """
     task = tasks[task_id]
+    m = MACHINES[machine]
+    sess = f"disp-{task_id}"
+    host_str = f"{m['user']}@{m['host']}" if m.get("ssh") else None
 
     try:
-        m = MACHINES[machine]
+        model_env, agent_cmd = build_agent_cmd(platform, model_key)
+        env_prefix = " ".join(f"{k}={v}" for k, v in model_env.items())
+        full_start = f"PATH=$HOME/.local/bin:$PATH {env_prefix} {agent_cmd}"
 
-        if m.get("ssh") and m["host"]:
-            cmd = [
-                "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10",
-                f"{m['user']}@{m['host']}",
-                f"claude --print '{prompt}'"
-            ]
+        # 1. Start tmux session with agent
+        start_cmd = f"tmux new-session -d -s {sess} '{full_start}'"
+        if host_str:
+            result = _ssh(host_str, start_cmd)
+            if result.returncode != 0:
+                task["status"] = "failed"
+                task["output"] = f"SSH failed: {result.stderr}"
+                return
         else:
-            claude_bin = os.path.expanduser("~/.local/bin/claude")
-            if not os.path.exists(claude_bin):
-                claude_bin = "claude"
-            cmd = [claude_bin, "--print", prompt]
+            subprocess.run(start_cmd, shell=True)
 
-        # Build clean env: add ~/.local/bin to PATH, remove model-switch
-        # overrides so claude uses its OAuth credentials
-        clean_env = {k: v for k, v in os.environ.items()
-                     if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL")}
-        clean_env["PATH"] = clean_env.get("PATH", "") + ":" + os.path.expanduser("~/.local/bin")
-        clean_env["HOME"] = os.path.expanduser("~")
+        time.sleep(3)  # Let agent initialize
 
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            env=clean_env,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
+        # 2. Auto-accept Claude's interactive prompts (trust + bypass warning)
+        #    Trust prompt: "Yes, I trust this folder" is pre-selected, just press Enter
+        #    Bypass warning: need Down arrow then Enter to select "Yes, I accept"
+        if platform == "claude":
+            _tmux_send_raw(sess, "Enter", host_str)
+            time.sleep(2)
+            _tmux_send_raw(sess, "Down Enter", host_str)
+            time.sleep(3)
 
-        output = []
-        for line in proc.stdout:
-            output.append(line)
-            task["output"] = "".join(output)
+        # 3. Send the initial prompt into the session
+        _tmux_send(sess, prompt, host_str)
 
-        proc.wait(timeout=300)
+        # Store session info so follow-ups can reach it
+        task["tmux_session"] = sess
+        task["host_str"] = host_str or "local"
+        task["status"] = "running"
 
-        task["status"] = "completed" if proc.returncode == 0 else "failed"
-        task["output"] = "".join(output)
+        # 3. Poll tmux pane output and stream back
+        deadline = time.time() + 600  # 10-min hard timeout
+        last_activity = time.time()
+        prev_output = ""
+
+        while time.time() < deadline:
+            time.sleep(2)
+
+            output = _tmux_capture(sess, host_str)
+
+            # Session died (tmux session no longer exists)
+            if output is None or (not output.strip() and time.time() - last_activity > 45):
+                break
+
+            if output != prev_output:
+                task["output"] = output
+                prev_output = output
+                last_activity = time.time()
+
+        # Final snapshot
+        final = _tmux_capture(sess, host_str)
+        if final:
+            task["output"] = final
+
+        if task["status"] == "running":
+            task["status"] = "completed"
         log_dispatch(machine, prompt, task["status"])
 
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        task["status"] = "failed"
-        task["output"] = task.get("output", "") + "\n\n[TIMEOUT after 5 minutes]"
-        log_dispatch(machine, prompt, "timeout")
     except Exception as e:
         task["status"] = "failed"
         task["output"] = str(e)
@@ -566,7 +790,10 @@ def login():
 @app.route("/")
 @check_auth
 def index():
-    return render_template_string(DISPATCH_HTML, machines=MACHINES)
+    resp = make_response(render_template_string(DISPATCH_HTML, machines=MACHINES))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
 
 
 @app.route("/api/dispatch", methods=["POST"])
@@ -575,12 +802,21 @@ def api_dispatch():
     data = request.json
     machine = data.get("machine", "zbook")
     prompt = data.get("prompt", "")
+    platform = data.get("platform", "claude")
+    model_key = data.get("model_key", "opus")
 
     if not prompt:
         return jsonify({"error": "No prompt provided"}), 400
-
     if machine not in MACHINES:
         return jsonify({"error": f"Unknown machine: {machine}"}), 400
+    if platform not in MODELS:
+        platform = "claude"
+    if model_key not in MODELS[platform]:
+        model_key = list(MODELS[platform].keys())[0]
+
+    # Aider only available on ZBook (local) for now
+    if platform == "aider" and machine != "zbook":
+        return jsonify({"error": "Aider is only available on ZBook (local). SSH remotes use Claude."}), 400
 
     dangerous = ["sudo ", "rm -rf", "mkfs", "dd if=", "chmod 777", "> /dev/", "shutdown", "reboot",
                  "systemctl stop", "systemctl disable", "kill -9", "pkill", "format"]
@@ -590,6 +826,8 @@ def api_dispatch():
     tasks[task_id] = {
         "id": task_id,
         "machine": machine,
+        "platform": platform,
+        "model_key": model_key,
         "prompt_text": prompt,
         "status": "escalation" if needs_escalation else "running",
         "message": f"This request may need elevated permissions: '{prompt}'" if needs_escalation else "",
@@ -598,7 +836,7 @@ def api_dispatch():
     }
 
     if not needs_escalation:
-        thread = threading.Thread(target=run_task, args=(task_id, machine, prompt))
+        thread = threading.Thread(target=run_task, args=(task_id, machine, prompt, platform, model_key))
         thread.daemon = True
         thread.start()
 
@@ -624,7 +862,10 @@ def api_escalation(task_id):
     action = request.json.get("action")
     if action == "approve":
         task["status"] = "running"
-        thread = threading.Thread(target=run_task, args=(task_id, task["machine"], task["prompt_text"]))
+        thread = threading.Thread(target=run_task, args=(
+            task_id, task["machine"], task["prompt_text"],
+            task.get("platform", "claude"), task.get("model_key", "opus")
+        ))
         thread.daemon = True
         thread.start()
         return jsonify({"ok": True, "action": "approved"})
@@ -638,6 +879,52 @@ def api_escalation(task_id):
 @check_auth
 def api_machines():
     return jsonify(MACHINES)
+
+
+@app.route("/api/send/<task_id>", methods=["POST"])
+@check_auth
+def api_send(task_id):
+    """Send a follow-up message into an active tmux session."""
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({"error": "Task not found"}), 404
+    sess = task.get("tmux_session")
+    if not sess:
+        return jsonify({"error": "No active session"}), 400
+    message = request.json.get("message", "").strip()
+    if not message:
+        return jsonify({"error": "No message"}), 400
+    host_str = task.get("host_str")
+    _tmux_send(sess, message, None if host_str == "local" else host_str)
+    task["status"] = "running"
+    return jsonify({"ok": True})
+
+
+@app.route("/api/close/<task_id>", methods=["POST"])
+@check_auth
+def api_close(task_id):
+    """Kill the tmux session for a task."""
+    task = tasks.get(task_id)
+    if task:
+        sess = task.get("tmux_session")
+        host_str = task.get("host_str")
+        if sess:
+            kill_cmd = f"tmux kill-session -t {sess} 2>/dev/null"
+            if host_str and host_str != "local":
+                _ssh(host_str, kill_cmd)
+            else:
+                subprocess.run(kill_cmd, shell=True)
+        task["status"] = "closed"
+    return jsonify({"ok": True})
+
+
+@app.route("/api/models")
+@check_auth
+def api_models():
+    result = {}
+    for platform, models in MODELS.items():
+        result[platform] = {k: {"label": v["label"]} for k, v in models.items()}
+    return jsonify(result)
 
 
 if __name__ == "__main__":
