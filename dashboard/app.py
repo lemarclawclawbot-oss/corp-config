@@ -132,6 +132,7 @@ DASHBOARD_HTML = """
     <div style="text-align:center;margin-bottom:20px;">
         <a href="http://localhost:5001" target="_blank" style="color:#00aaff;text-decoration:none;padding:8px 16px;border:1px solid #00aaff;border-radius:4px;font-size:0.85em;margin:0 8px;">Dispatch</a>
         <a href="http://localhost:5002" target="_blank" style="color:#ffaa00;text-decoration:none;padding:8px 16px;border:1px solid #ffaa00;border-radius:4px;font-size:0.85em;margin:0 8px;">Tenant Comms</a>
+        <a href="http://localhost:5003" target="_blank" style="color:#aa88ff;text-decoration:none;padding:8px 16px;border:1px solid #aa88ff;border-radius:4px;font-size:0.85em;margin:0 8px;">Properties</a>
     </div>
     <div class="footer">Corp Fleet v1.0 — ZBook · Lenovo · Chromebook</div>
 </body>

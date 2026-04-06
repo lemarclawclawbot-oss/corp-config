@@ -292,6 +292,7 @@ DISPATCH_HTML = """
         <div style="display:flex;gap:10px;align-items:center;">
             <a href="http://localhost:5000" target="_blank" style="color:#00ff88;text-decoration:none;padding:6px 12px;border:1px solid #00ff88;border-radius:4px;font-size:0.8em;">Dashboard</a>
             <a href="http://localhost:5002" target="_blank" style="color:#ffaa00;text-decoration:none;padding:6px 12px;border:1px solid #ffaa00;border-radius:4px;font-size:0.8em;">Tenant Comms</a>
+            <a href="http://localhost:5003" target="_blank" style="color:#aa88ff;text-decoration:none;padding:6px 12px;border:1px solid #aa88ff;border-radius:4px;font-size:0.8em;">Properties</a>
             <button class="logout" onclick="if(confirm('Log out?')){document.cookie='dispatch_token=;max-age=0';location.href='/login'}">Logout</button>
         </div>
     </div>
@@ -705,47 +706,63 @@ def run_task(task_id, machine, prompt, platform="claude", model_key="opus"):
         else:
             subprocess.run(start_cmd, shell=True)
 
-        time.sleep(3)  # Let agent initialize
-
-        # 2. Auto-accept Claude's interactive prompts (trust + bypass warning)
-        #    Trust prompt: "Yes, I trust this folder" is pre-selected, just press Enter
-        #    Bypass warning: need Down arrow then Enter to select "Yes, I accept"
-        if platform == "claude":
-            _tmux_send_raw(sess, "Enter", host_str)
-            time.sleep(2)
-            _tmux_send_raw(sess, "Down Enter", host_str)
-            time.sleep(3)
-
-        # 3. Send the initial prompt into the session
-        _tmux_send(sess, prompt, host_str)
-
-        # Store session info so follow-ups can reach it
+        task["output"] = "Starting agent session..."
         task["tmux_session"] = sess
         task["host_str"] = host_str or "local"
         task["status"] = "running"
 
-        # 3. Poll tmux pane output and stream back
+        # 2. Wait for agent to initialize
+        #    --dangerously-skip-permissions bypasses ALL prompts (trust + permissions),
+        #    so no keystrokes needed for Claude. Aider also starts directly.
+        init_wait = 8 if platform == "claude" else 4
+        time.sleep(init_wait)
+
+        # Check tmux session is actually alive before sending prompt
+        check_cmd = f"tmux has-session -t {sess} 2>/dev/null && echo alive || echo dead"
+        if host_str:
+            alive_check = _ssh(host_str, check_cmd).stdout.strip()
+        else:
+            alive_check = subprocess.run(check_cmd, shell=True, capture_output=True, text=True).stdout.strip()
+
+        if alive_check != "alive":
+            task["status"] = "failed"
+            task["output"] = f"Agent session failed to start. tmux session '{sess}' died during init."
+            log_dispatch(machine, prompt, "failed: session died")
+            return
+
+        task["output"] = "Agent ready, sending prompt..."
+
+        # 3. Send the initial prompt into the session
+        _tmux_send(sess, prompt, host_str)
+
+        # 4. Poll tmux pane output and stream back
         deadline = time.time() + 600  # 10-min hard timeout
         last_activity = time.time()
         prev_output = ""
+        # Give agent generous time to produce first output
+        no_output_timeout = 120  # 2 minutes for first output, then tighter
 
         while time.time() < deadline:
             time.sleep(2)
 
             output = _tmux_capture(sess, host_str)
 
-            # Session died (tmux session no longer exists)
-            if output is None or (not output.strip() and time.time() - last_activity > 45):
+            # Check if tmux session still exists
+            if output is None:
                 break
 
-            if output != prev_output:
+            if output.strip() and output != prev_output:
                 task["output"] = output
                 prev_output = output
                 last_activity = time.time()
+                # Once we've seen output, tighten the idle timeout
+                no_output_timeout = 60
+            elif not output.strip() and time.time() - last_activity > no_output_timeout:
+                break
 
         # Final snapshot
         final = _tmux_capture(sess, host_str)
-        if final:
+        if final and final.strip():
             task["output"] = final
 
         if task["status"] == "running":
