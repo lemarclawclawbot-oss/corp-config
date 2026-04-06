@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-06T01:24:21.336435",
+  "last_updated": "2026-04-06T05:50:47.762790",
   "fleet": {
     "zbook": {
       "role": "heavy_lifter",
@@ -19,7 +19,8 @@
         "dispatch": "running",
         "tenant-comm": "running",
         "property-mgmt": "running",
-        "telegram-bot": "running"
+        "telegram-bot": "running",
+        "crewai-missions": "running"
       },
       "tasks": {
         "completed": [
@@ -44,7 +45,7 @@
         ],
         "pending": []
       },
-      "last_heartbeat": "2026-04-06T01:24:21.336418"
+      "last_heartbeat": "2026-04-06T05:50:37.227888"
     },
     "lenovo": {
       "role": "router_relay",
@@ -67,7 +68,7 @@
           "Configure as backup Ollama host"
         ]
       },
-      "last_heartbeat": "2026-04-06T01:23:45.596133"
+      "last_heartbeat": "2026-04-06T05:50:47.762776"
     },
     "chromebook": {
       "role": "dashboard_viewer",

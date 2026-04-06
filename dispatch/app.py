@@ -293,6 +293,7 @@ DISPATCH_HTML = """
             <a href="http://localhost:5000" target="_blank" style="color:#00ff88;text-decoration:none;padding:6px 12px;border:1px solid #00ff88;border-radius:4px;font-size:0.8em;">Dashboard</a>
             <a href="http://localhost:5002" target="_blank" style="color:#ffaa00;text-decoration:none;padding:6px 12px;border:1px solid #ffaa00;border-radius:4px;font-size:0.8em;">Tenant Comms</a>
             <a href="http://localhost:5003" target="_blank" style="color:#aa88ff;text-decoration:none;padding:6px 12px;border:1px solid #aa88ff;border-radius:4px;font-size:0.8em;">Properties</a>
+            <a href="http://localhost:5004" target="_blank" style="color:#ff88aa;text-decoration:none;padding:6px 12px;border:1px solid #ff88aa;border-radius:4px;font-size:0.8em;">Crews</a>
             <button class="logout" onclick="if(confirm('Log out?')){document.cookie='dispatch_token=;max-age=0';location.href='/login'}">Logout</button>
         </div>
     </div>
