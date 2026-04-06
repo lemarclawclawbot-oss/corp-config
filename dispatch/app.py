@@ -336,11 +336,21 @@ DISPATCH_HTML = """
                 <div class="model-row">
                     <label>Platform:</label>
                     <select id="platform-select" onchange="onPlatformChange()">
-                        <option value="claude">Claude</option>
+                        <option value="shell" selected>Shell (direct, free)</option>
+                        <option value="ollama">Ollama Chat (local, free)</option>
+                        <option value="claude">Claude (API credits)</option>
                         <option value="aider">Aider</option>
                     </select>
                     <label>Model:</label>
-                    <select id="model-select-claude">
+                    <select id="model-select-shell">
+                        <option value="bash" selected>Bash</option>
+                    </select>
+                    <select id="model-select-ollama" style="display:none">
+                        <option value="hermes" selected>Hermes3 (8B, free)</option>
+                        <option value="glm4">GLM4 (9B, free)</option>
+                        <option value="qwen">Qwen2.5-Coder (7B, free)</option>
+                    </select>
+                    <select id="model-select-claude" style="display:none">
                         <option value="sonnet" selected>Sonnet 4.6 (default)</option>
                         <option value="opus">Opus 4.6 (powerful)</option>
                         <option value="haiku">Haiku 4.5 (fast)</option>
@@ -379,12 +389,20 @@ DISPATCH_HTML = """
 
         function onPlatformChange() {
             var platform = document.getElementById('platform-select').value;
-            document.getElementById('model-select-claude').style.display = platform === 'claude' ? '' : 'none';
-            document.getElementById('model-select-aider').style.display = platform === 'aider' ? '' : 'none';
+            ['shell','ollama','claude','aider'].forEach(p => {
+                var el = document.getElementById('model-select-' + p);
+                if (el) el.style.display = p === platform ? '' : 'none';
+            });
             if (platform === 'aider' && selectedMachine !== 'zbook') {
                 selectMachine('zbook');
             }
+            // Update placeholder based on platform
+            var ta = document.getElementById('prompt');
+            if (platform === 'shell') ta.placeholder = 'Enter a shell command (e.g. df -h, uptime, ollama list)';
+            else if (platform === 'ollama') ta.placeholder = 'Ask the local AI anything...';
+            else ta.placeholder = 'What do you want this machine to do?';
         }
+        onPlatformChange();
 
         // Load ZBook history on startup (default machine)
         loadMachineHistory('zbook');
@@ -775,6 +793,84 @@ def run_task(task_id, machine, prompt, platform="claude", model_key="opus"):
         log_dispatch(machine, prompt, f"error: {e}")
 
 
+def run_shell_task(task_id, machine, command):
+    """Run a shell command directly on a machine and return output. No AI, free."""
+    task = tasks[task_id]
+    m = MACHINES[machine]
+    host_str = f"{m['user']}@{m['host']}" if m.get("ssh") else None
+
+    try:
+        task["status"] = "running"
+        task["output"] = f"Running on {machine.upper()}: {command}"
+
+        if host_str:
+            result = _ssh(host_str, command, timeout=60)
+            output = result.stdout or result.stderr or "(no output)"
+        else:
+            result = subprocess.run(
+                command, shell=True, capture_output=True, text=True, timeout=60
+            )
+            output = result.stdout or result.stderr or "(no output)"
+
+        task["output"] = output.strip()
+        task["status"] = "completed"
+        log_dispatch(machine, f"[shell] {command}", "completed")
+
+    except subprocess.TimeoutExpired:
+        task["output"] = "(command timed out after 60s)"
+        task["status"] = "failed"
+        log_dispatch(machine, f"[shell] {command}", "timeout")
+    except Exception as e:
+        task["status"] = "failed"
+        task["output"] = str(e)
+        log_dispatch(machine, f"[shell] {command}", f"error: {e}")
+
+
+OLLAMA_MODELS = {
+    "hermes": "hermes3:latest",
+    "glm4": "glm4:latest",
+    "qwen": "qwen2.5-coder:7b",
+}
+
+
+def run_ollama_task(task_id, machine, prompt, model_key="hermes"):
+    """Chat with a local Ollama model. Free, runs on GPU."""
+    task = tasks[task_id]
+    model = OLLAMA_MODELS.get(model_key, "hermes3:latest")
+
+    try:
+        task["status"] = "running"
+        task["output"] = f"Thinking ({model})..."
+
+        # Use Ollama API directly for clean output
+        import urllib.request
+        ollama_host = "http://localhost:11434"
+        if machine != "zbook":
+            ollama_host = f"http://{MACHINES['zbook']['host']}:11434"
+
+        payload = json.dumps({
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+        }).encode()
+
+        req = urllib.request.Request(
+            f"{ollama_host}/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        resp = urllib.request.urlopen(req, timeout=120)
+        result = json.loads(resp.read().decode())
+        task["output"] = result.get("response", "(no response)")
+        task["status"] = "completed"
+        log_dispatch(machine, f"[ollama/{model}] {prompt[:60]}", "completed")
+
+    except Exception as e:
+        task["status"] = "failed"
+        task["output"] = f"Ollama error: {e}"
+        log_dispatch(machine, f"[ollama] {prompt[:60]}", f"error: {e}")
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     ip = request.remote_addr
@@ -826,10 +922,11 @@ def api_dispatch():
         return jsonify({"error": "No prompt provided"}), 400
     if machine not in MACHINES:
         return jsonify({"error": f"Unknown machine: {machine}"}), 400
-    if platform not in MODELS:
-        platform = "claude"
-    if model_key not in MODELS[platform]:
-        model_key = list(MODELS[platform].keys())[0]
+
+    # Validate platform
+    valid_platforms = ["shell", "ollama", "claude", "aider"]
+    if platform not in valid_platforms:
+        platform = "shell"
 
     # Aider only available on ZBook (local) for now
     if platform == "aider" and machine != "zbook":
@@ -853,7 +950,14 @@ def api_dispatch():
     }
 
     if not needs_escalation:
-        thread = threading.Thread(target=run_task, args=(task_id, machine, prompt, platform, model_key))
+        if platform == "shell":
+            thread = threading.Thread(target=run_shell_task, args=(task_id, machine, prompt))
+        elif platform == "ollama":
+            thread = threading.Thread(target=run_ollama_task, args=(task_id, machine, prompt, model_key))
+        else:
+            if platform in MODELS and model_key not in MODELS[platform]:
+                model_key = list(MODELS[platform].keys())[0]
+            thread = threading.Thread(target=run_task, args=(task_id, machine, prompt, platform, model_key))
         thread.daemon = True
         thread.start()
 
